@@ -2,7 +2,12 @@
 title: "Machine Learning Coursera Project"
 author: "huangk3"
 date: "June 12, 2015"
-output: html_document
+output:
+  html_document:
+    pandoc_args: [
+      "+RTS", "-K64m",
+      "-RTS"
+    ]
 ---
 
 ### Background
@@ -75,16 +80,22 @@ confusionMatrix(TestData$classe, pred_test)
 ```
 From the result we found that the accuracy is `r round(confusionMatrix(TestData$classe, pred_test)$overall[["Accuracy"]], 3)`, Kappa is `r round(confusionMatrix(TestData$classe, pred_test)$overall[["Kappa"]], 3)`.
 
+## Out of Sample Error Rate
+```{r}
+OSE<-1-as.numeric(confusionMatrix(TestData$classe, pred_test)$overall[1])
+```
+The out of sample error is `r round(OSE, 3)`.
+  
 ```{r echo=F}
 plot(rfModel, main="Fig.2 Number of Selected Predictors V.S Accuracy")
 ```
-
+  
 ```{r echo=F, cache=T}
 library(randomForest)
 rfm<-randomForest(classe~., data=TrainData, ntree=100, keep.forest=FALSE, importance=TRUE)
 varImpPlot(rfm, main="Fig.3 Variable Importance in Decreasing Order", cex=0.5)
 ```
-
+  
 ```{r echo=F, cache=T}
 library(rpart)
 rpmodel<-rpart(classe~., data=TrainData, method="class")
