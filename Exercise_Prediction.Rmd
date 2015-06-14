@@ -1,0 +1,112 @@
+---
+title: "Machine Learning Coursera Project"
+author: "huangk3"
+date: "June 12, 2015"
+output: html_document
+---
+
+### Background
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset). The goal of the project is to predict the manner in which people did the exercise.
+
+
+### Data Preparation
+Download and load the dataset for training and testing respectively.
+```{r, echo=T}
+download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv" , 'training.csv', method="curl")
+download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv" , 'testing.csv', method="curl")
+trainset<-read.csv("training.csv", header=T)
+testset<-read.csv("testing.csv", header=T)
+```
+
+```{r}
+dim(trainset)
+dim(testset)
+```
+The training dataset contains `r dim(trainset)[1]` observations and `r dim(trainset)[2]` variables, while the testing dataset has `r dim(testset)[1]` observations and `r dim(testset)[2]` variables.  
+
+Exclude the variables whose variance near zero or has more than 5% 'NA' observations from the training dataset.
+```{r echo=T}
+library(caret)
+trainset_a<-trainset[, nearZeroVar(trainset, saveMetrics=TRUE)$nzv!=TRUE]
+trainset_cleaned<-trainset_a[, colSums(is.na(trainset_a))<0.5*dim(trainset_a)[1]]
+```
+
+Further exclude the variables which would unlikely contribute to the outcome.
+```{r echo=T}
+trainset_cleaned<-trainset_cleaned[, !grepl("^X|name|timestamp|window", names(trainset_cleaned))]
+```
+
+Subset the testing dataset to make it has the same variabls as the training set.
+```{r echo=T}
+testset_cleaned<-testset[, names(trainset_cleaned[, -length(trainset_cleaned)])]
+```
+
+Check if there are any missing value in the cleaned training dataset or testing dataset.
+```{r echo=T}
+sum(complete.cases(trainset_cleaned))==nrow(trainset_cleaned)
+sum(complete.cases(testset_cleaned))==nrow(testset_cleaned)
+```
+
+The dataset looks complete, we can use them to build the predictive model.
+
+## Slice the Training Dataset
+Using the "createDataPartition" function of the "caret" package, we split the cleaned training dataset into the train/test group.
+```{r}
+set.seed(150612) # For reproducibile purpose
+intrain<-createDataPartition(trainset_cleaned$classe, p=0.75, list=F)
+TrainData<-trainset_cleaned[intrain, ]
+TestData<-trainset_cleaned[-intrain, ]
+```
+
+## Explore the Training Dataset
+Visualize the correlation matrix of the "train"" dataset
+```{r}
+library(corrplot)
+corrplot(corr=cor(TrainData[, -length(TrainData)]), method = "circle", order="hclust", type='lower', tl.cex=0.5,mar=c(0,2,2,1), tl.col='blue',tl.pos='ld', diag=F, title="Fig. 1 Pairwise correlations of the variables (training)")
+```
+
+## Data Modeling
+We selected Random Forest algorithm to buld the prediction model because of its accuracy and robustness to correlated covariates & outliers in general, and we'll use ten-fold for the algorithm cross validation.
+```{r, cache=TRUE}
+rfModel<-train(classe~., data=TrainData, method="rf",trControl=trainControl(method="repeatedcv", number=10, repeats=3), ntree=100)
+pred_test<-predict(rfModel, newdata=TestData)
+confusionMatrix(TestData$classe, pred_test)
+```
+From the result we found that the accuracy is `r round(confusionMatrix(TestData$classe, pred_test)$overall[["Accuracy"]], 3)`, Kappa is `r round(confusionMatrix(TestData$classe, pred_test)$overall[["Kappa"]], 3)`.
+
+```{r echo=F}
+plot(rfModel, main="Fig.2 Number of Selected Predictors V.S Accuracy")
+```
+
+```{r echo=F, cache=T}
+library(randomForest)
+rfm<-randomForest(classe~., data=TrainData, ntree=100, keep.forest=FALSE, importance=TRUE)
+varImpPlot(rfm, main="Fig.3 Variable Importance in Decreasing Order", cex=0.5)
+```
+
+```{r echo=F, cache=T}
+library(rpart)
+rpmodel<-rpart(classe~., data=TrainData, method="class")
+plot(rpmodel,uniform=T, main="Fig.4 Classification Tree for Personal Activity")
+text(rpmodel, use.n=F, all=T, cex=0.3)
+```
+
+## Prediction for Test Dataset
+Apply the model to the original testing data set downloaded from the data source.
+```{r echo=T}
+predict(rfModel, testset_cleaned)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
